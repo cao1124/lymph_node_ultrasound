@@ -1,0 +1,9 @@
+model,acc,weighted_f1,sensitivity,specificity
+convnext,0.6944,0.6965,0.7355,0.6238
+densenet161,0.7087,0.7082,0.7737,0.5971
+efficientnet-b0,0.7435,0.7426,0.8062,0.6359
+max_vit,0.6962,0.6958,0.7624,0.5825
+resnext101,0.7069,0.7051,0.7836,0.5752
+swintransformer,0.6604,0.6448,0.8161,0.3932
+vgg16,0.7265,0.7224,0.819,0.568
+vison_transformer,0.6702,0.6748,0.686,0.6432
