@@ -177,8 +177,8 @@ def train(data_dir, txt_path, num_epochs, bs, pt_dir, category_num, model_name, 
 def classification():
     # 甲状腺 左右侧叶峡部分类
     data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
-    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/20250619-中山淋巴恶性瘤淋巴瘤2分类.txt'
-    data = 'Section_QC/20250619-中山淋巴恶性瘤淋巴瘤2分类-'
+    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/20250620-中山淋巴恶性瘤淋巴瘤2分类-补充训练.txt'
+    data = 'Section_QC/20250620-中山淋巴恶性瘤淋巴瘤2分类-'
     target_list = [x.name for x in LymphCls2CN]
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "3"

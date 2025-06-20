@@ -6,6 +6,7 @@ bin-release/
 logs
 model
 filter_data
+plot_util
 
 # Other files and folders
 .settings/

@@ -22,7 +22,7 @@ def test_image():
     cls_model = torch.load(cls_model, map_location=device)
     cls_model = modelMap(cls_model, device).eval()
 
-    base_dir = r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集1'
+    base_dir = r'C:\Users\Administrator\Desktop\中山医院jpg'
     pres, labels = [], []
     for cls in os.listdir(base_dir):
         if cls == '良性':
