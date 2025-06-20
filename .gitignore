@@ -4,6 +4,7 @@ bin-release/
 [Oo]bj/
 [Bb]in/
 logs
+model
 filter_data
 
 # Other files and folders

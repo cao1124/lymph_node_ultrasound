@@ -29,10 +29,12 @@ def paths_to_txt():
                     for file in tqdm(files):
                         if os.path.splitext(file)[1].lower() in image_extensions:
                             file_path = os.path.join(root, file)
+                            if '报告' in file:
+                                continue
                             if cls == '转移淋巴瘤':
-                                f.write(file_path + ',' + '恶性\n')
+                                f.write(file_path + ',' + '转移淋巴瘤\n')
                             elif cls == '非转移淋巴瘤':
-                                f.write(file_path + ',' + '淋巴瘤\n')
+                                f.write(file_path + ',' + '非转移淋巴瘤\n')
                             else:
                                 print(file_path, ': 错误标签')
     print(f"已完成，共写入 {sum(1 for line in open(output_file, 'r', encoding='utf-8'))} 个图像路径到 {output_file}")

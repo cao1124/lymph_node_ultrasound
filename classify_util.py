@@ -258,6 +258,12 @@ class DatasetTxt(Dataset):
         return img, self.labels[idx], self.names[idx]
 
 
+def modelMap(model, device):
+    if isinstance(model, nn.DataParallel):
+        model = model.module
+    return model.to(device)
+
+
 class LymphCls2CN(Enum):
     转移淋巴瘤 = 0
     非转移淋巴瘤 = 1
