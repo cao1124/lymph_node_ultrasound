@@ -13,18 +13,21 @@ from tqdm import tqdm
 
 
 def paths_to_txt():
-    output_file = r'F:\med_dataset\lymph淋巴结\中山淋巴结\20250620-中山淋巴恶性瘤淋巴瘤2分类-补充训练.txt'
+    output_file = r'F:\med_dataset\lymph淋巴结\中山淋巴结\20250623-中山淋巴恶性瘤淋巴瘤2分类-补充训练.txt'
     image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
     # 确保扩展名是小写
     image_extensions = [ext.lower() for ext in image_extensions]
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        folder_path = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练补充'
+        folder_path = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练补充-第二批肿瘤医院测试'
         for hospital_name in os.listdir(folder_path):
             for cls in os.listdir(os.path.join(folder_path, hospital_name)):
                 if cls == '良性':
                     continue
                 for root, dirs, files in os.walk(os.path.join(folder_path, hospital_name, cls)):
+                    if ',' in root:
+                        os.rename(root, root.replace(',', ''))
+                        root = root.replace(',', '')
                     print(root)
                     for file in tqdm(files):
                         if os.path.splitext(file)[1].lower() in image_extensions:
