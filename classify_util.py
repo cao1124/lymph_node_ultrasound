@@ -204,7 +204,7 @@ def cv_read(file_path, flag=-1):
 
 
 def cv_write(file_path, file):
-    cv2.imencode('.bmp', file)[1].tofile(file_path)
+    cv2.imencode('.png', file)[1].tofile(file_path)
 
 
 class BalanceDataSampler(Sampler):
@@ -242,7 +242,8 @@ class DatasetTxt(Dataset):
                 img_name = img_path.split('/')[-1]
                 self.images.append(img_path)
                 self.names.append(img_name)
-                self.labels.append(LymphCls2CN[cls].value)
+                # self.labels.append(LymphCls2CN[cls].value)
+                self.labels.append(TransCls5CN[cls].value)
         self.length = len(self.images)
 
     def __len__(self):
@@ -267,3 +268,11 @@ def modelMap(model, device):
 class LymphCls2CN(Enum):
     转移淋巴瘤 = 0
     非转移淋巴瘤 = 1
+
+
+class TransCls5CN(Enum):
+    鼻咽 = 0
+    肺 = 1
+    乳腺 = 2
+    食管 = 3
+    其他 = 4
