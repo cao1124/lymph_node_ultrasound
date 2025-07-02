@@ -18,32 +18,33 @@ from classify_util import modelMap, is_image, cv_read, sec_pre, LymphCls2CN
 
 
 def test_image():
-    for i in range(4):
-        cls_model = f'model/20250623-中山淋巴恶性瘤淋巴瘤2分类-resnet50-bs200-lr0.0001/fold{i}-best-acc-model.pt'
-        print(cls_model)
-        cls_model = torch.load(cls_model, map_location=device)
-        cls_model = modelMap(cls_model, device).eval()
+    # for i in range(4):
+    # cls_model = f'model/20250623-中山淋巴恶性瘤淋巴瘤2分类-resnet50-bs200-lr0.0001/fold{i}-best-acc-model.pt'
+    cls_model = 'model/20250625-中山淋巴恶性瘤淋巴瘤2分类-0.8108.pt'
+    print(cls_model)
+    cls_model = torch.load(cls_model, map_location=device)
+    cls_model = modelMap(cls_model, device).eval()
 
-        base_dir = r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集1'
-        pres, labels = [], []
-        for cls in os.listdir(base_dir):
-            if cls == '良性':
-                continue
-            for root, dirs, files in os.walk(os.path.join(base_dir, cls)):
-                # print(root)
-                for f in files:     # tqdm()
-                    if is_image(os.path.join(root, f)):
-                        img_ori = cv_read(os.path.join(root, f), flag=3)
-                        img = Image.fromarray(img_ori).convert('RGB')
-                        img = trans(img)
-                        img = torch.unsqueeze(img, dim=0).to(device)
+    base_dir = r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\crop'
+    pres, labels = [], []
+    for cls in os.listdir(base_dir):
+        if cls == '良性':
+            continue
+        for root, dirs, files in os.walk(os.path.join(base_dir, cls)):
+            # print(root)
+            for f in files:     # tqdm()
+                if is_image(os.path.join(root, f)):
+                    img_ori = cv_read(os.path.join(root, f), flag=3)
+                    img = Image.fromarray(img_ori).convert('RGB')
+                    img = trans(img)
+                    img = torch.unsqueeze(img, dim=0).to(device)
 
-                        with torch.no_grad():
-                            res, _ = sec_pre(img, cls_model, device)
-                            pres.append(LymphCls2CN(res).name)
-                            labels.append(cls)
-        print('confusion_matrix:\n{}'.format(confusion_matrix(labels, pres)))
-        print('classification_report:\n{}'.format(classification_report(labels, pres, digits=4)))
+                    with torch.no_grad():
+                        res, _ = sec_pre(img, cls_model, device)
+                        pres.append(LymphCls2CN(res).name)
+                        labels.append(cls)
+    print('confusion_matrix:\n{}'.format(confusion_matrix(labels, pres)))
+    print('classification_report:\n{}'.format(classification_report(labels, pres, digits=4)))
 
 
 if __name__ == '__main__':

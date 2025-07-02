@@ -7,14 +7,10 @@
 @Author  ：cao xu
 @Date    ：2025/6/19 上午10:18
 """
-import os
 from collections import Counter
 from sklearn.utils import shuffle
-import numpy as np
-import torch
 from sklearn.metrics import confusion_matrix, classification_report
-from classify_util import img_trans, prepare_model, EarlyStopping, BalanceDataSampler, DatasetTxt, func, LymphCls2CN, \
-    TransCls5CN
+from classify_util import *
 from torch.utils.data import DataLoader
 import matplotlib
 import matplotlib.pyplot as plt
@@ -182,12 +178,17 @@ def classification():
     # data = 'Section_QC/20250625-中山淋巴恶性瘤淋巴瘤2分类-'
     # target_list = [x.name for x in LymphCls2CN]
     # 恶性瘤淋巴瘤2分类
-    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop/'
-    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/20250625-中山转移淋巴瘤5分类-crop.txt'
-    data = 'Section_QC/20250625-中山转移淋巴瘤5分类-'
-    target_list = [x.name for x in TransCls5CN]
+    # data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
+    # txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/20250625-中山转移淋巴瘤5分类.txt'
+    # data = 'Section_QC/20250625-中山转移淋巴瘤5分类-原图-'
+    # target_list = [x.name for x in TransCls5CN]
+    # 良恶性2分类
+    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
+    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250702-良恶性2分类-all.txt'
+    data = 'Section_QC/20250702-良恶性2分类-原图-'
+    target_list = [x.name for x in LymphPathologicCls2CN]
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "6"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = 'resnet50'  # resnext50-bs128 densenet161-bs64 resnet18-bs256
     category_num = len(target_list)

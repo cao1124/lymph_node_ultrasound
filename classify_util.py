@@ -243,7 +243,8 @@ class DatasetTxt(Dataset):
                 self.images.append(img_path)
                 self.names.append(img_name)
                 # self.labels.append(LymphCls2CN[cls].value)
-                self.labels.append(TransCls5CN[cls].value)
+                # self.labels.append(TransCls5CN[cls].value)
+                self.labels.append(LymphPathologicCls2CN[cls].value)
         self.length = len(self.images)
 
     def __len__(self):
@@ -265,7 +266,7 @@ def modelMap(model, device):
     return model.to(device)
 
 
-class LymphCls2CN(Enum):
+class LymphClsTrans2CN(Enum):
     转移淋巴瘤 = 0
     非转移淋巴瘤 = 1
 
@@ -276,3 +277,8 @@ class TransCls5CN(Enum):
     乳腺 = 2
     食管 = 3
     其他 = 4
+
+
+class LymphPathologicCls2CN(Enum):
+    良性 = 0
+    恶性 = 1

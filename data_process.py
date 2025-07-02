@@ -18,17 +18,17 @@ from classify_util import cv_read, cv_write
 
 
 def paths_to_txt():
-    output_file = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集\训练补充\crop\训练补充crop.txt'
+    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\20250702-良恶性2分类-all.txt'
     image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
     # 确保扩展名是小写
     image_extensions = [ext.lower() for ext in image_extensions]
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        folder_path = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集\训练补充\crop'
+        folder_path = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集'
         for hospital_name in os.listdir(folder_path):
             for cls in os.listdir(os.path.join(folder_path, hospital_name)):
-                if cls == '良性':
-                    continue
+                # if cls == '良性':
+                #     continue
                 for root, dirs, files in os.walk(os.path.join(folder_path, hospital_name, cls)):
                     if ',' in root:
                         os.rename(root, root.replace(',', ''))
@@ -40,9 +40,11 @@ def paths_to_txt():
                             if '报告' in file:
                                 continue
                             if cls == '转移淋巴瘤':
-                                f.write(file_path + ',' + '转移淋巴瘤\n')
+                                f.write(file_path + ',' + '恶性\n')    # 转移淋巴瘤
                             elif cls == '非转移淋巴瘤':
-                                f.write(file_path + ',' + '非转移淋巴瘤\n')
+                                f.write(file_path + ',' + '恶性\n')   # 非转移淋巴瘤
+                            elif cls == '良性':
+                                f.write(file_path + ',' + '良性\n')
                             else:
                                 print(file_path, ': 错误标签')
     print(f"已完成，共写入 {sum(1 for line in open(output_file, 'r', encoding='utf-8'))} 个图像路径到 {output_file}")
@@ -233,16 +235,16 @@ def roi_crop():
 
 
 def txt_5cls():
-    ori_txt = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集crop\20250625-中山淋巴恶性瘤淋巴瘤2分类-补充训练-crop.txt'
-    output_file = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集crop\20250625-中山转移淋巴瘤5分类-crop.txt'
+    ori_txt = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集\20250623-中山淋巴恶性瘤淋巴瘤2分类-补充训练-all.txt'
+    output_file = r'F:\med_dataset\lymph淋巴结\中山淋巴结\训练集\20250625-中山转移淋巴瘤5分类.txt'
     out_lines = []
     path_files, name_files = [], []
-    for ori_dir in [r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集1\crop\转移淋巴瘤',
-                    r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\crop\转移淋巴瘤']:
+    for ori_dir in [r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集1\ori\转移淋巴瘤',
+                    r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\ori\转移淋巴瘤']:
         for root, dirs, files in os.walk(ori_dir):
-            for f in tqdm(files):
+            for f in files:
                 if not f.endswith('.json'):
-                    f = os.path.splitext(f)[0] + '.png'
+                    # f = os.path.splitext(f)[0] + '.png'
                     path_files.append(os.path.join(root, f))
                     name_files.append(f)
     with open(ori_txt, 'r', encoding='utf8') as lines:
@@ -286,9 +288,9 @@ def os_rename():
 
 
 if __name__ == '__main__':
-    # paths_to_txt()
+    paths_to_txt()
     # roi_crop()
     # roi_crop_txt()
-    txt_5cls()
+    # txt_5cls()
     # os_rename()
     print('done')
