@@ -287,10 +287,54 @@ def os_rename():
                     os.rename(root, root.replace(',', ''))
 
 
+def generate_dataset_txt():
+    all_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\所有颈部淋巴'  # 包含10743张图
+    swollen_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\肿大颈部淋巴'  # 包含2543张图
+    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\crop\20250812-良恶性肿大标签.txt'
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+    image_extensions = [ext.lower() for ext in image_extensions]
+    swollen_image_names = []
+    for name in os.listdir(swollen_lymph_root):
+        swollen_image_names.append(name)
+    print(f"找到 {len(swollen_image_names)} 个肿大图像")
+
+    # 写入输出文件
+    with open(output_file, 'w', encoding='utf-8') as f:
+        total_count = 0
+        swollen_count = 0
+        non_swollen_count = 0
+        for name in tqdm(os.listdir(all_lymph_root), desc="处理图像"):
+            if any(name.lower().endswith(ext) for ext in image_extensions):
+                rel_path = os.path.join(all_lymph_root, name)
+                if name in swollen_image_names:
+                    swollen_label = '肿大'  # 对应 SwollenStatus.肿大 = 1
+                    swollen_count += 1
+                else:
+                    swollen_label = '非肿大'  # 对应 SwollenStatus.非肿大 = 0
+                    non_swollen_count += 1
+                f.write(f"{rel_path},{swollen_label}\n")
+                total_count += 1
+    print(f"处理完成！总共写入 {total_count} 个图像路径")
+    print(f"- 肿大图像: {swollen_count}")
+    print(f"- 非肿大图像: {non_swollen_count}")
+    print(f"文件已保存至: {output_file}")
+
+
 if __name__ == '__main__':
-    paths_to_txt()
+    # paths_to_txt()
     # roi_crop()
     # roi_crop_txt()
     # txt_5cls()
     # os_rename()
+    generate_dataset_txt()
+
+    # # 计算重复文件
+    # all_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\所有颈部淋巴'  # 包含10743张图
+    # swollen_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\肿大颈部淋巴'  # 包含2543张图
+    # all_lymph_files = set(os.listdir(all_lymph_root))
+    # swollen_lymph_files = set(os.listdir(swollen_lymph_root))
+    # common_files = all_lymph_files.intersection(swollen_lymph_files)
+    # # 输出重复文件数量
+    # print(f"重复的文件数量: {len(common_files)}")
+
     print('done')

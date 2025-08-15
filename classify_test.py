@@ -14,25 +14,25 @@ from PIL import Image
 from sklearn.metrics import confusion_matrix, classification_report
 from torchvision import transforms
 from tqdm import tqdm
-from classify_util import modelMap, is_image, cv_read, sec_pre, LymphCls2CN
+from classify_util import *
 
 
 def test_image():
     # for i in range(4):
     # cls_model = f'model/20250623-中山淋巴恶性瘤淋巴瘤2分类-resnet50-bs200-lr0.0001/fold{i}-best-acc-model.pt'
-    cls_model = 'model/20250625-中山淋巴恶性瘤淋巴瘤2分类-0.8108.pt'
+    cls_model = 'model/20250702-良恶性2分类-原图0.8591.pt'
     print(cls_model)
     cls_model = torch.load(cls_model, map_location=device)
     cls_model = modelMap(cls_model, device).eval()
 
-    base_dir = r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\crop'
+    base_dir = r'E:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\ori'
     pres, labels = [], []
     for cls in os.listdir(base_dir):
-        if cls == '良性':
-            continue
+        # if cls == '良性':
+        #     continue
         for root, dirs, files in os.walk(os.path.join(base_dir, cls)):
-            # print(root)
-            for f in files:     # tqdm()
+            print(root)
+            for f in tqdm(files):
                 if is_image(os.path.join(root, f)):
                     img_ori = cv_read(os.path.join(root, f), flag=3)
                     img = Image.fromarray(img_ori).convert('RGB')
@@ -41,8 +41,11 @@ def test_image():
 
                     with torch.no_grad():
                         res, _ = sec_pre(img, cls_model, device)
-                        pres.append(LymphCls2CN(res).name)
-                        labels.append(cls)
+                        pres.append(LymphPathologicCls2CN(res).name)
+                        if cls == '良性':
+                            labels.append('良性')
+                        else:
+                            labels.append('恶性')
     print('confusion_matrix:\n{}'.format(confusion_matrix(labels, pres)))
     print('classification_report:\n{}'.format(classification_report(labels, pres, digits=4)))
 
