@@ -397,9 +397,9 @@ def evaluate(model, loader, device, target_names):
 # ================== 分类任务入口 ==================
 def classification():
     # 数据集配置
-    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
+    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop/'
     # 有标签数据 (1320例)
-    labeled_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250702-良恶性2分类-all.txt'
+    labeled_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250625-中山淋巴恶性瘤淋巴瘤2分类-补充训练-crop.txt'
     # 无标签数据 (5853例，其中肿大1067例)
     weak_label_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt'
     # 目标类别
@@ -407,7 +407,7 @@ def classification():
     target_list_aux = [x.name for x in SwollenStatus]  # 肿大状态
 
     # 训练配置
-    os.environ['CUDA_VISIBLE_DEVICES'] = "6"
+    os.environ['CUDA_VISIBLE_DEVICES'] = "1"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = 'resnet50'
     category_num_main = len(target_list_main)  # 2: 良性/恶性
@@ -418,7 +418,7 @@ def classification():
     num_epochs = 500
 
     # 输出目录
-    data = 'Section_QC/20250815-半监督-良恶性-肿大分类-'
+    data = 'Section_QC/20250909-半监督-良恶性crop-肿大分类-'
     pt_dir = data + model_name + '-bs' + str(bs) + '-lr' + str(lr) + '/'
     os.makedirs(pt_dir, exist_ok=True)
 
