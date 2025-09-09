@@ -8,6 +8,8 @@
 @Date    ：2025/8/19 上午9:08 
 """
 import argparse
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -182,19 +184,16 @@ def main():
     parser.add_argument('--labeled_ratio', type=float, default=0.5,
                         help='portion of labeled samples per batch')
     parser.add_argument('--steps_per_epoch', type=int, default=1000)
-    parser.add_argument('--save', type=str, default='best.pt')
+    parser.add_argument('--save_dir', type=str, default='Section_QC/20250819-半监督-良恶性-肿大分类-V3版-resnet50-bs64-lr1e-3')
     args = parser.parse_args()
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    os.makedirs(args.save_dir, exist_ok=True)
+    device = torch.device(f"cuda:{args.device_id}" if torch.cuda.is_available() else "cpu")
     weak_tf, strong_tf = build_transforms(args.img_size)
-
     # Datasets from TXT (your original format)
     ds_train_l = TxtDataset(args.train_labeled_txt, transform_w=weak_tf, transform_s=strong_tf)
     ds_train_w = TxtDataset(args.train_auxonly_txt, transform_w=weak_tf, transform_s=strong_tf)
     ds_val = TxtDataset(args.val_txt, transform_w=weak_tf, transform_s=strong_tf)
     ds_test = TxtDataset(args.test_txt, transform_w=weak_tf, transform_s=strong_tf) if args.test_txt else None
-
     train_ds = ConcatDataset([ds_train_l, ds_train_w])
 
     # Build two-stream batch sampler: indices are into the ConcatDataset
@@ -238,7 +237,7 @@ def main():
         if bal_acc > best_bal:
             best_bal = bal_acc
             torch.save({'epoch': epoch, 'model': mean_teacher.teacher.state_dict(),
-                        'best_balanced_acc': best_bal}, args.save)
+                        'best_balanced_acc': best_bal}, os.path.join(args.save_dir, 'best.pt'))
             print(f"[Saved] best model @ epoch {epoch}, balanced acc={best_bal:.4f}")
 
     if test_loader is not None:
