@@ -9,6 +9,7 @@
 """
 import json
 import os
+import shutil
 
 import cv2
 import numpy as np
@@ -320,13 +321,99 @@ def generate_dataset_txt():
     print(f"文件已保存至: {output_file}")
 
 
+import os
+
+
+# 读取txt文件，获取所有图像文件名（不带路径）
+def read_image_names_from_txt(txt_path):
+    image_names = set()
+    with open(txt_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            # 提取图像文件名（路径的最后一部分）
+            image_path = line.split(',')[0].strip()
+            image_name = os.path.basename(image_path)
+            image_names.add(image_name)
+    return image_names
+
+
+def filter_txt_by_existing_images(original_txt_path, image_dir, output_txt_path):
+    """
+    过滤txt文件，只保留在指定目录中实际存在的图像路径
+
+    参数:
+    original_txt_path: 原始txt文件路径
+    image_dir: 图像目录路径
+    output_txt_path: 输出txt文件路径
+    """
+    # 读取原始txt文件
+    with open(original_txt_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    # 创建输出文件
+    with open(output_txt_path, 'w', encoding='utf-8') as out_f:
+        for line in lines:
+            # 提取图像路径和标签
+            parts = line.strip().split(',')
+            if len(parts) < 2:
+                continue
+
+            image_path = parts[0]
+            label = parts[1]
+
+            # 从路径中提取文件名
+            filename = os.path.basename(image_path)
+
+            # 构建完整的图像文件路径
+            full_image_path = os.path.join(image_dir, filename)
+
+            # 检查文件是否存在
+            if os.path.exists(full_image_path):
+                out_f.write(line)
+                print(f"保留: {filename}")
+            else:
+                print(f"跳过: {filename} (文件不存在)")
+
+
+def train_data_shutil():
+    src_root = r"E:\med_dataset\lymph淋巴结\中山淋巴结\训练集"
+    dst_root = r"E:\med_dataset\lymph淋巴结\中山淋巴结\训练集-待标注"
+
+    for root, _, files in os.walk(src_root):
+        for fname in files:
+            if fname.lower().endswith(".png"):
+                img_path = os.path.join(root, fname)
+                json_path = img_path + ".json"
+                if not os.path.exists(json_path):
+                    # 计算相对路径（去掉源根目录）
+                    rel_path = os.path.relpath(img_path, src_root)
+                    dst_path = os.path.join(dst_root, rel_path)
+
+                    # 创建目标目录
+                    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+
+                    # 复制文件
+                    shutil.copy2(img_path, dst_path)
+                    print(f"Copied: {img_path} -> {dst_path}")
+    print("Done: 未带标注的图像已提取到 训练集-待标注 路径下。")
+
+
 if __name__ == '__main__':
     # paths_to_txt()
     # roi_crop()
     # roi_crop_txt()
     # txt_5cls()
     # os_rename()
-    generate_dataset_txt()
+    # generate_dataset_txt()
+    
+    # 训练集-待标注
+    train_data_shutil()
+    
+    # original_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-中山淋巴恶性瘤淋巴瘤2分类-补充训练-all.txt"
+    # image_dir = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop"
+    # output_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-filtered_dataset.txt"
+    #
+    # filter_txt_by_existing_images(original_txt, image_dir, output_txt)
+    # print(f"过滤完成! 结果保存在 {output_txt}")
 
     # # 计算重复文件
     # all_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\所有颈部淋巴'  # 包含10743张图

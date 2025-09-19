@@ -1,57 +1,72 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 """
-@Project ：lymph_node_ultrasound 
+@Project ：lymph_node_ultrasound
 @File    ：multitask_cls.py
-@IDE     ：PyCharm 
-@Author  ：cao xu
-@Date    ：2025/8/15 下午2:21 
+@IDE     ：PyCharm
+@Author  ：cao xu (edited)
+@Date    ：2025/9/10
+
+说明（关键改动）：
+- FIX: 教师用弱增强、学生用强增强做主任务一致性（基于CE伪标签 + 置信度阈值）
+- FIX: 仅调用 warmup.step()，不再双步 LR
+- FIX: 训练采用“双 DataLoader”（labeled 与 weak 分开），每 step 固定比例融合
+- 调整数据增强已在 util 中完成
 """
+import os
+import warnings
 from collections import Counter
-from sklearn.utils import shuffle
-from sklearn.metrics import confusion_matrix, classification_report
-from multitask_util import *
-from torch.utils.data import DataLoader, ConcatDataset, SubsetRandomSampler
+from itertools import cycle
+import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-import torch.multiprocessing
-import warnings
-import numpy as np
-import torch.nn.functional as F
-import os
 import torch
+import torch.nn.functional as F
+import torch.multiprocessing
+from sklearn.utils import shuffle
+from sklearn.metrics import confusion_matrix, classification_report
+from torch.utils.data import DataLoader, SubsetRandomSampler
+
+from multitask_util import *
 
 matplotlib.use('AGG')
 torch.multiprocessing.set_sharing_strategy('file_system')
 warnings.filterwarnings("ignore")
 
+# ------------------ 辅助：ramp-up 与一致性权重 ------------------
+def sigmoid_rampup(current, rampup_length):
+    if rampup_length == 0:
+        return 1.0
+    current = np.clip(current, 0.0, rampup_length)
+    phase = 1.0 - current / rampup_length
+    return float(np.exp(-5.0 * phase * phase))  # [0,1]
 
-# ================== 半监督训练函数 ==================
+# ================== 半监督训练 ==================
 def semi_supervised_train(data_dir, labeled_txt_path, weak_label_txt_path,
                           num_epochs, bs, pt_dir, category_num_main, category_num_aux,
                           model_name, device, lr, target_list_main, target_list_aux,
-                          patience, alpha=0.99, consistency_weight=5.0):
-    # 1. 数据准备
-    # 加载有标签数据（良恶性分类数据）
-    with open(labeled_txt_path, 'r', encoding='utf-8') as file:
-        labeled_lines = file.readlines()
+                          patience, alpha=0.99, consistency_weight=1.0,
+                          tau=0.8, rampup_epochs=20, labeled_ratio=0.5):
+    """
+    tau: 伪标签置信度阈值
+    rampup_epochs: 前多少个 epoch 逐步放大一致性权重
+    labeled_ratio: 每 step 中主任务有标签 batch 的比例(例如 0.5 -> 一半来自 labeled)
+    """
+    # 1) 读取数据列表
+    with open(labeled_txt_path, 'r', encoding='utf-8') as f:
+        labeled_lines = f.readlines()
+    with open(weak_label_txt_path, 'r', encoding='utf-8') as f:
+        weak_label_lines = f.readlines()
 
-    # 加载弱标签数据（肿大状态分类数据）
-    with open(weak_label_txt_path, 'r', encoding='utf-8') as file:
-        weak_label_lines = file.readlines()
-
-    # 五折交叉验证 (仅使用有标签数据)
+    # 2) 五折（固定第5折为测试）
     labeled_lines = shuffle(labeled_lines, random_state=1)
     fold_size = int(len(labeled_lines) * 0.2)
     folds = [labeled_lines[i:i + fold_size] for i in range(0, len(labeled_lines), fold_size)]
-
-    # 固定测试集为第五折
     test_list = [folds[4]]
 
     for fold_idx in range(4):
         print(f'五折交叉验证 第{fold_idx + 1}次实验')
 
-        # 构建训练/验证/测试集
         train_list, valid_list = [], []
         for idx, fold in enumerate(folds):
             if idx == fold_idx:
@@ -59,31 +74,23 @@ def semi_supervised_train(data_dir, labeled_txt_path, weak_label_txt_path,
             elif fold != test_list[0]:
                 train_list.append(fold)
 
-        # ==== 重构数据集创建 ====
-        # 有标签训练集（只有主任务标签 - 良恶性）
+        # ---- 构建数据集 ----
         train_labeled_dataset = WeaklyLabeledDataset(
             [item for fold in train_list for item in fold],
             data_dir,
             transform=img_trans['train'],
             strong_transform=img_trans['strong'],
             has_main_label=True,
-            has_aux_label=False  # 病理数据没有肿大标签
+            has_aux_label=False
         )
-
-        # 弱标签数据集（只有辅任务标签 - 肿大状态）
         weak_label_dataset = WeaklyLabeledDataset(
             weak_label_lines,
             data_dir,
             transform=img_trans['train'],
             strong_transform=img_trans['strong'],
-            has_main_label=False,  # 无良恶性标签
-            has_aux_label=True  # 有肿大标签
+            has_main_label=False,
+            has_aux_label=True
         )
-
-        # 合并数据集
-        train_dataset = ConcatDataset([train_labeled_dataset, weak_label_dataset])
-
-        # 验证集（只有主任务标签）
         valid_dataset = WeaklyLabeledDataset(
             [item for fold in valid_list for item in fold],
             data_dir,
@@ -91,8 +98,6 @@ def semi_supervised_train(data_dir, labeled_txt_path, weak_label_txt_path,
             has_main_label=True,
             has_aux_label=False
         )
-
-        # 测试集（只有主任务标签）
         test_dataset = WeaklyLabeledDataset(
             [item for fold in test_list for item in fold],
             data_dir,
@@ -101,324 +106,256 @@ def semi_supervised_train(data_dir, labeled_txt_path, weak_label_txt_path,
             has_aux_label=False
         )
 
-        # 数据集大小
-        train_size = len(train_dataset)
-        valid_size = len(valid_dataset)
-        test_size = len(test_dataset)
-        print(f'train_size: {train_size}, valid_size: {valid_size}, test_size: {test_size}')
+        print(f'train(labeled)={len(train_labeled_dataset)}, train(weak)={len(weak_label_dataset)}, '
+              f'valid={len(valid_dataset)}, test={len(test_dataset)}')
 
-        # 2. 数据加载器
-        # 有标签数据的类权重（仅主任务）
-        labeled_labels = [1 if line.strip().split(',')[1] == '恶性' else 0 for line in [item for fold in train_list for item in fold]]
-        label_count = Counter(labeled_labels)
-        class_weights = [1.0 / label_count.get(i, 1.0) for i in range(category_num_main)]
+        # ---- DataLoader：分流并控制比例 ----
+        labeled_labels = [1 if line.strip().split(',')[1] == '恶性' else 0
+                          for line in [item for fold in train_list for item in fold]]
+        # class_weights = [1.0 / Counter(labeled_labels).get(i, 1.0) for i in range(category_num_main)]
+        class_weights = None  # FIX: 关闭类权重
 
-        # 采样器（仅对有标签数据）
-        # sampler = BalanceDataSampler(labeled_labels) if len(labeled_labels) > 0 else None
+        # 平衡采样（仅 labeled）
         if len(labeled_labels) > 0:
-            base_sampler = BalanceDataSampler(labeled_labels)  # 返回的索引针对 labeled 子数据集 (0..L-1)
-            # 将这些索引映射到 ConcatDataset（[labeled, weak]）的全局索引空间
-            labeled_count = len(train_labeled_dataset)
-            weak_count = len(weak_label_dataset)
-            # base_sampler.prob 是一个列表，包含重复的 labeled 索引
-            combined_indices = list(base_sampler.prob)  # indices referencing 0..labeled_count-1
-            # 把弱标签数据的索引也加入（offset by labeled_count），保证弱样本出现在采样池中
-            combined_indices += list(range(labeled_count, labeled_count + weak_count))
-            # 随机打乱顺序，形成最终采样序列
-            random.shuffle(combined_indices)
-            # 使用 SubsetRandomSampler 把我们准备好的索引列表传入 DataLoader
-            sampler = SubsetRandomSampler(combined_indices)
+            sampler_lbl = SubsetRandomSampler(BalanceDataSampler(labeled_labels).prob)
         else:
-            sampler = None
+            sampler_lbl = None
 
-        train_loader = DataLoader(
-            train_dataset,
-            batch_size=bs,
-            shuffle=sampler is None,
+        # 每 step 采样比例
+        bs_labeled = max(1, int(bs * labeled_ratio))
+        bs_weak = max(1, bs - bs_labeled)
+
+        labeled_loader = DataLoader(
+            train_labeled_dataset,
+            batch_size=bs_labeled,
+            shuffle=(sampler_lbl is None),
+            sampler=sampler_lbl,
             num_workers=4,
             pin_memory=True,
-            sampler=sampler
+            drop_last=True,
         )
-
-        valid_loader = DataLoader(
-            valid_dataset,
-            batch_size=bs,
-            shuffle=False,
-            num_workers=2
+        weak_loader = DataLoader(
+            weak_label_dataset,
+            batch_size=bs_weak,
+            shuffle=True,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=True,
         )
+        valid_loader = DataLoader(valid_dataset, batch_size=bs, shuffle=False, num_workers=2)
+        test_loader = DataLoader(test_dataset, batch_size=bs, shuffle=False, num_workers=2)
 
-        test_loader = DataLoader(
-            test_dataset,
-            batch_size=bs,
-            shuffle=False,
-            num_workers=2
-        )
-
-        # 3. 模型准备
-        model, optimizer, scheduler, warmup, loss_func_main, loss_func_aux = prepare_multi_task_model(
+        # 3) 模型与优化器
+        model, optimizer, cosine, warmup, loss_func_main, loss_func_aux = prepare_multi_task_model(
             category_num_main=category_num_main,
             category_num_aux=category_num_aux,
             model_name=model_name,
             lr=lr,
             num_epochs=num_epochs,
             device=device,
-            weights_main=torch.tensor(class_weights) if class_weights is not None else None)  # 确保 weights_main 不是 None
+            weights_main=None  # FIX: 显式传 None
+            # weights_main=torch.tensor(class_weights) if class_weights is not None else None
+        )
 
-        # 创建Mean Teacher模型
-        mean_teacher = MeanTeacherModel(model)
-        mean_teacher.to(device)
-
-        # 早停机制
+        mean_teacher = MeanTeacherModel(model).to(device)
         early_stopping = EarlyStopping(pt_dir, patience=patience)
 
-        # 训练变量
-        best_valid_acc = 0.0
-        best_epoch = 0
+        best_valid_acc, best_epoch = 0.0, 0
         history = {'train_loss': [], 'valid_loss': []}
 
-        # 4. 训练循环
+        # 4) 训练循环
         for epoch in range(num_epochs):
-            print(f"Epoch: {epoch + 1}/{num_epochs}")
             model.train()
+            print(f"Epoch: {epoch + 1}/{num_epochs}")
 
-            # 训练统计
-            train_loss = 0.0
-            main_correct = 0
-            aux_correct = 0
-            total_labeled_main = 0
-            total_labeled_aux = 0
+            # ramp-up 一致性权重
+            cw = consistency_weight * sigmoid_rampup(epoch, rampup_epochs)
 
-            for batch in train_loader:
-                images = batch['image'].to(device)
-                images_strong = batch['image_strong'].to(device)
-                labels_main = batch['label_main'].to(device)
-                labels_aux = batch['label_aux'].to(device)
+            it_l = iter(cycle(labeled_loader))
+            it_w = iter(cycle(weak_loader))
+            # 为了覆盖较大的数据端，按两者长度较大的 loader 的步数来迭代
+            steps = max(len(labeled_loader), len(weak_loader))
 
-                # 区分样本类型
-                labeled_main_mask = (labels_main != -1)  # 有主标签的样本（病理数据）
-                labeled_aux_mask = (labels_aux != -1)  # 有辅标签的样本（肿大数据）
-                unlabeled_mask = ~labeled_main_mask  # 无主标签的样本（肿大数据）
+            running_loss = 0.0
+            main_correct = aux_correct = 0
+            total_main = total_aux = 0
 
-                # 学生模型预测 (弱增强)
-                outputs_main, outputs_aux = model(images)
+            for _ in range(steps):
+                batch_l = next(it_l)
+                batch_w = next(it_w)
 
-                # 教师模型预测 (无梯度)
+                # ---- 有主标签批（监督 CE）----
+                images_l = batch_l['image'].to(device)         # 弱增强
+                labels_main = batch_l['label_main'].to(device) # 0/1
+                outputs_main_l, _ = model(images_l)
+                loss_main = loss_func_main(outputs_main_l, labels_main)
+
                 with torch.no_grad():
-                    mean_teacher.teacher.eval()
-                    teacher_main, teacher_aux = mean_teacher(images_strong, is_teacher=True)
+                    preds_main = outputs_main_l.argmax(dim=1)
+                    main_correct += (preds_main == labels_main).sum().item()
+                    total_main += labels_main.size(0)
 
-                # 损失计算
-                losses = []
+                # ---- 仅辅标签批（辅任务监督 + 主任务一致性）----
+                images_w_weak = batch_w['image'].to(device)         # 教师看弱增强
+                images_w_strong = batch_w['image_strong'].to(device)  # 学生看强增强
+                labels_aux = batch_w['label_aux'].to(device)         # 0/1
 
-                # === 主任务监督损失（病理数据）===
-                if torch.any(labeled_main_mask):
-                    loss_main = loss_func_main(
-                        outputs_main[labeled_main_mask],
-                        labels_main[labeled_main_mask]
-                    )
-                    losses.append(loss_main)
+                # 辅任务监督（学生头）
+                _, outputs_aux_w = model(images_w_weak)
+                loss_aux = loss_func_aux(outputs_aux_w, labels_aux)
 
-                    # 统计准确率
-                    _, main_preds = torch.max(outputs_main[labeled_main_mask], 1)
-                    main_correct += torch.sum(main_preds == labels_main[labeled_main_mask]).item()
-                    total_labeled_main += torch.sum(labeled_main_mask).item()
+                with torch.no_grad():
+                    preds_aux = outputs_aux_w.argmax(dim=1)
+                    aux_correct += (preds_aux == labels_aux).sum().item()
+                    total_aux += labels_aux.size(0)
 
-                # === 辅任务监督损失（肿大数据）===
-                if torch.any(labeled_aux_mask):
-                    loss_aux = loss_func_aux(
-                        outputs_aux[labeled_aux_mask],
-                        labels_aux[labeled_aux_mask]
-                    )
-                    losses.append(0.5 * loss_aux)  # 辅任务权重
+                # 主任务一致性（教师弱增强 -> 伪标签；学生强增强 -> 对齐）
+                with torch.no_grad():
+                    teacher_main_w, _ = mean_teacher(images_w_weak, is_teacher=True)
+                    probs_t = F.softmax(teacher_main_w, dim=1)
+                    conf, pseudo = probs_t.max(dim=1)
+                    mask = conf.ge(tau)  # 置信度筛选
 
-                    # 统计准确率
-                    with torch.no_grad():
-                        _, aux_preds = torch.max(outputs_aux[labeled_aux_mask], 1)
-                        correct_batch = (aux_preds == labels_aux[labeled_aux_mask]).sum().item()
-                        aux_correct += correct_batch
-                        total_labeled_aux += labeled_aux_mask.sum().item()
+                # if mask.any():
+                #     student_main_s, _ = model(images_w_strong[mask])
+                #     loss_cons = F.cross_entropy(student_main_s, pseudo[mask])
+                # else:
+                #     loss_cons = torch.tensor(0.0, device=device)
+                # FIX: 简单类均衡截断（每类最多取 K 个）
+                K = 16  # 可根据 batch size 调
+                if mask.any():
+                    idx_all = torch.nonzero(mask).squeeze(1)
+                    keep_idx = []
+                    for c in [0, 1]:
+                        cls_idx = idx_all[pseudo[idx_all] == c]
+                        if cls_idx.numel() > 0:
+                            keep_idx.append(cls_idx[:K])
+                    if len(keep_idx) > 0:
+                        keep_idx = torch.cat(keep_idx)
+                        student_main_s, _ = model(images_w_strong[keep_idx])
+                        loss_cons = F.cross_entropy(student_main_s, pseudo[keep_idx])
+                    else:
+                        loss_cons = torch.tensor(0.0, device=device)
+                else:
+                    loss_cons = torch.tensor(0.0, device=device)
+                # 总损失：主任务监督 + 辅任务监督(0.5) + 一致性(cw)
+                loss = loss_main + 0.5 * loss_aux + cw * loss_cons
 
-                # === 一致性损失（肿大数据）===
-                if torch.any(unlabeled_mask):
-                    # 学生模型预测 (强增强)
-                    student_main_strong, _ = model(images_strong[unlabeled_mask])
-
-                    # 一致性损失 (MSE)
-                    consistency_loss = F.mse_loss(
-                        F.softmax(student_main_strong, dim=1),
-                        F.softmax(teacher_main[unlabeled_mask], dim=1)
-                    )
-                    losses.append(consistency_weight * consistency_loss)
-
-                # 总损失
-                loss = sum(losses)
-                train_loss += loss.item()
-
-                # 反向传播
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                mean_teacher.update_teacher(alpha=alpha)
 
-                # 更新教师模型
-                mean_teacher.update_teacher(alpha)
+                running_loss += loss.item()
 
-            # 学习率调整
-            scheduler.step()
+            # 只调用 warmup（内部会在合适 epoch 驱动 cosine）
             warmup.step()
 
-            # 训练统计
-            train_loss /= len(train_loader)
-            main_acc = main_correct / total_labeled_main if total_labeled_main > 0 else 0.0
-            aux_acc = aux_correct / total_labeled_aux if total_labeled_aux > 0 else 0.0
+            avg_train_loss = running_loss / steps
+            main_acc = main_correct / total_main if total_main > 0 else 0.0
+            aux_acc = aux_correct / total_aux if total_aux > 0 else 0.0
+            print(f"Train: Loss {avg_train_loss:.4f} | MainAcc {main_acc:.4f} | AuxAcc {aux_acc:.4f} | CW {cw:.3f}")
 
-            print(f"Train Epoch: {epoch + 1}, Loss: {train_loss:.4f}, Main Acc: {main_acc:.4f}, Aux Acc: {aux_acc:.4f}")
-
-            # 5. 验证（使用教师模型）
+            # 验证（用 Teacher）
             valid_loss, valid_main_acc = validate(
-                mean_teacher.teacher,  # 使用教师模型验证
-                valid_loader,
-                device,
-                loss_func_main
+                mean_teacher.teacher, valid_loader, device, loss_func_main
             )
+            print(f"Val:   Loss {valid_loss:.4f} | Acc {valid_main_acc:.4f}")
 
-            history['train_loss'].append(train_loss)
+            history['train_loss'].append(avg_train_loss)
             history['valid_loss'].append(valid_loss)
 
-            print(f"Val Epoch: {epoch + 1}, Loss: {valid_loss:.4f}, Acc: {valid_main_acc:.4f}")
-
-            # 保存最佳模型
             if valid_main_acc > best_valid_acc:
                 best_valid_acc = valid_main_acc
                 best_epoch = epoch + 1
                 torch.save(mean_teacher.teacher.state_dict(),
                            os.path.join(pt_dir, f'fold{fold_idx}-best-acc-model.pt'))
-                print(f"New best model saved at epoch {best_epoch} with acc {best_valid_acc:.4f}")
+                print(f"New best model saved @ epoch {best_epoch} acc={best_valid_acc:.4f}")
 
-            # 早停检查
             early_stopping(valid_loss, mean_teacher.teacher)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
 
-        # 6. 保存训练曲线
+        # 5) 保存曲线
         plt.figure()
         plt.plot(history['train_loss'], label='Train Loss')
         plt.plot(history['valid_loss'], label='Valid Loss')
         plt.legend()
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.title('Training History')
+        plt.xlabel('Epoch'); plt.ylabel('Loss'); plt.title('Training History')
         plt.savefig(os.path.join(pt_dir, f'loss_curve_fold{fold_idx}.png'))
         plt.close()
 
-        # 7. 测试最佳模型
+        # 6) 测试（加载最佳 Teacher 权重到同构模型）
         test_model = prepare_multi_task_model(
-            category_num_main,
-            category_num_aux,
-            model_name,
-            lr,
-            num_epochs,
-            device
+            category_num_main, category_num_aux, model_name, lr, num_epochs, device
         )[0]
         test_model.load_state_dict(torch.load(os.path.join(pt_dir, f'fold{fold_idx}-best-acc-model.pt')))
         test_model.to(device)
 
-        test_acc, test_report = evaluate(
-            test_model,
-            test_loader,
-            device,
-            target_list_main
-        )
-
+        test_acc, test_report = evaluate(test_model, test_loader, device, target_list_main)
         print(f"Test Accuracy: {test_acc:.4f}")
         print("Classification Report:")
         print(test_report)
 
-        # 保存测试结果
         with open(os.path.join(pt_dir, f'test_report_fold{fold_idx}.txt'), 'w') as f:
             f.write(test_report)
 
-
-# ================== 验证函数 ==================
+# ================== 验证 ==================
 def validate(model, loader, device, loss_func):
     model.eval()
-    total_loss = 0.0
-    correct = 0
-    total = 0
-
+    total_loss, correct, total = 0.0, 0, 0
     with torch.no_grad():
         for batch in loader:
             images = batch['image'].to(device)
             labels_main = batch['label_main'].to(device)
-
-            # 仅主任务
             outputs_main, _ = model(images)
             loss = loss_func(outputs_main, labels_main)
-
             total_loss += loss.item()
-            _, preds = torch.max(outputs_main, 1)
-            correct += torch.sum(preds == labels_main).item()
+            preds = outputs_main.argmax(dim=1)
+            correct += (preds == labels_main).sum().item()
             total += labels_main.size(0)
+    return total_loss / len(loader), (correct / total if total > 0 else 0.0)
 
-    avg_loss = total_loss / len(loader)
-    accuracy = correct / total if total > 0 else 0.0
-
-    return avg_loss, accuracy
-
-
-# ================== 评估函数 ==================
+# ================== 评估 ==================
 def evaluate(model, loader, device, target_names):
     model.eval()
-    all_preds = []
-    all_labels = []
-
+    all_preds, all_labels = [], []
     with torch.no_grad():
         for batch in loader:
             images = batch['image'].to(device)
             labels_main = batch['label_main'].to(device)
-
             outputs_main, _ = model(images)
-            _, preds = torch.max(outputs_main, 1)
-
+            preds = outputs_main.argmax(dim=1)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels_main.cpu().numpy())
-
-    # 计算指标
     accuracy = np.mean(np.array(all_preds) == np.array(all_labels))
     cm = confusion_matrix(all_labels, all_preds)
     report = classification_report(all_labels, all_preds, target_names=target_names, digits=4)
-
     print("Confusion Matrix:")
     print(cm)
-
     return accuracy, report
 
-
-# ================== 分类任务入口 ==================
+# ================== 入口 ==================
 def classification():
-    # 数据集配置
-    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop/'
-    # 有标签数据 (1320例)
-    labeled_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250625-中山淋巴恶性瘤淋巴瘤2分类-补充训练-crop.txt'
-    # 无标签数据 (5853例，其中肿大1067例)
+    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
+    labeled_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250702-良恶性2分类-all.txt'
     weak_label_txt_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt'
-    # 目标类别
-    target_list_main = [x.name for x in LymphPathologicCls2CN]  # 良恶性
-    target_list_aux = [x.name for x in SwollenStatus]  # 肿大状态
 
-    # 训练配置
+    target_list_main = [x.name for x in LymphPathologicCls2CN]
+    target_list_aux = [x.name for x in SwollenStatus]
+
     os.environ['CUDA_VISIBLE_DEVICES'] = "1"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = 'resnet50'
-    category_num_main = len(target_list_main)  # 2: 良性/恶性
-    category_num_aux = len(target_list_aux)  # 2: 肿大/非肿大
-    bs = 64  # 减小batch size以适应半监督
-    lr = 0.0001
-    patience = 30
+    category_num_main = len(target_list_main)
+    category_num_aux = len(target_list_aux)
+    bs = 64
+    lr = 0.001
+    patience = 20
     num_epochs = 500
 
-    # 输出目录
-    data = 'Section_QC/20250909-半监督-良恶性crop-肿大分类-'
+    data = 'Section_QC/20250911-半监督-良恶性-肿大分类-'
     pt_dir = data + model_name + '-bs' + str(bs) + '-lr' + str(lr) + '/'
     os.makedirs(pt_dir, exist_ok=True)
 
@@ -440,11 +377,13 @@ def classification():
         target_list_main=target_list_main,
         target_list_aux=target_list_aux,
         patience=patience,
-        alpha=0.995,  # EMA衰减率
-        consistency_weight=5.0  # 一致性损失权重
+        alpha=0.995,                # EMA 衰减
+        consistency_weight=0.1,     # 最大一致性权重
+        tau=0.95,                    # 置信度阈值
+        rampup_epochs=60,           # 前 epoch ramp-up
+        labeled_ratio=0.7           # 每 step 一半 labeled，一半 weak
     )
     print('训练完成')
-
 
 if __name__ == '__main__':
     classification()
