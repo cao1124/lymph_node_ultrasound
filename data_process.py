@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 
+from pathlib import Path
 import cv2
 import numpy as np
 from tqdm import tqdm
@@ -397,6 +398,40 @@ def train_data_shutil():
     print("Done: 未带标注的图像已提取到 训练集-待标注 路径下。")
 
 
+def keep_swollen_only(in_txt: str, out_txt: str, encoding: str = "utf-8"):
+    """
+    读取 in_txt（每行形如: path,label），仅保留 label == '肿大' 的行，
+    写入 out_txt。会忽略空行与不规范行。
+    """
+    kept, total = 0, 0
+    out_lines = []
+
+    with open(in_txt, "r", encoding=encoding, errors="ignore") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            total += 1
+            # 只按第一个逗号切分，避免路径里万一含逗号
+            parts = [p.strip() for p in line.split(",", 1)]
+            if len(parts) < 2:
+                # 不规范行，跳过
+                continue
+            path, label = parts[0], parts[1]
+            # 只保留标签严格等于“肿大”的行；避免把“非肿大”包含进来
+            if label == "肿大":
+                out_lines.append(f"{path},肿大")
+                kept += 1
+
+    # 确保输出目录存在
+    Path(out_txt).parent.mkdir(parents=True, exist_ok=True)
+    with open(out_txt, "w", encoding=encoding) as f:
+        if out_lines:
+            f.write("\n".join(out_lines) + "\n")
+
+    print(f"Done. kept={kept}/{total} lines with label='肿大' -> {out_txt}")
+
+
 if __name__ == '__main__':
     # paths_to_txt()
     # roi_crop()
@@ -406,7 +441,7 @@ if __name__ == '__main__':
     # generate_dataset_txt()
     
     # 训练集-待标注
-    train_data_shutil()
+    # train_data_shutil()
     
     # original_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-中山淋巴恶性瘤淋巴瘤2分类-补充训练-all.txt"
     # image_dir = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop"
@@ -424,4 +459,6 @@ if __name__ == '__main__':
     # # 输出重复文件数量
     # print(f"重复的文件数量: {len(common_files)}")
 
+    keep_swollen_only("/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt",
+                      "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250929-仅肿大.txt")
     print('done')
