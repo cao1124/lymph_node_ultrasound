@@ -244,7 +244,9 @@ class DatasetTxt(Dataset):
                 self.names.append(img_name)
                 # self.labels.append(LymphCls2CN[cls].value)
                 # self.labels.append(TransCls5CN[cls].value)
-                self.labels.append(LymphPathologicCls2CN[cls].value)
+                # self.labels.append(LymphPathologicCls2CN[cls].value)
+                self.labels.append(LymphCls2CN[cls].value)
+                # self.labels.append(TransCls6CN[cls].value)
         self.length = len(self.images)
 
     def __len__(self):
@@ -277,6 +279,20 @@ class TransCls5CN(Enum):
     乳腺 = 2
     食管 = 3
     其他 = 4
+
+
+class LymphCls2CN(Enum):
+    弥漫大B = 0
+    其他 = 1
+
+
+class TransCls6CN(Enum):
+    肺癌 = 0
+    乳腺癌 = 1
+    食管癌 = 2
+    鼻咽癌 = 3
+    腹腔肿瘤 = 4
+    其他 = 5
 
 
 class LymphPathologicCls2CN(Enum):

@@ -9,6 +9,7 @@
 """
 import json
 import os
+import random
 import shutil
 
 from pathlib import Path
@@ -49,6 +50,36 @@ def paths_to_txt():
                                 f.write(file_path + ',' + '良性\n')
                             else:
                                 print(file_path, ': 错误标签')
+    print(f"已完成，共写入 {sum(1 for line in open(output_file, 'r', encoding='utf-8'))} 个图像路径到 {output_file}")
+
+
+def paths_to_txt2():
+    folder_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/20251016-第三部分细分/建模/淋巴瘤'
+    output_file = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分-淋巴瘤2分类.txt'
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+    image_extensions = [ext.lower() for ext in image_extensions]
+    
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for cls in os.listdir(folder_path):
+            for root, dirs, files in os.walk(os.path.join(folder_path, cls)):
+                if ',' in root:
+                    os.rename(root, root.replace(',', ''))
+                    root = root.replace(',', '')
+                if '，' in root:
+                    os.rename(root, root.replace('，', ''))
+                    root = root.replace('，', '')
+                print(root)
+                for file in tqdm(files):
+                    if os.path.splitext(file)[1].lower() in image_extensions:
+                        file_path = os.path.join(root, file)
+                        if '报告' in file:
+                            continue
+                        if cls == 'others':
+                            f.write(file_path + ',' + '其他\n')
+                        elif cls == '弥漫大B':
+                            f.write(file_path + ',' + '弥漫大B\n')
+                        else:
+                            print(file_path, ': 错误标签')
     print(f"已完成，共写入 {sum(1 for line in open(output_file, 'r', encoding='utf-8'))} 个图像路径到 {output_file}")
 
 
@@ -322,9 +353,6 @@ def generate_dataset_txt():
     print(f"文件已保存至: {output_file}")
 
 
-import os
-
-
 # 读取txt文件，获取所有图像文件名（不带路径）
 def read_image_names_from_txt(txt_path):
     image_names = set()
@@ -432,14 +460,40 @@ def keep_swollen_only(in_txt: str, out_txt: str, encoding: str = "utf-8"):
     print(f"Done. kept={kept}/{total} lines with label='肿大' -> {out_txt}")
 
 
+def merge_txt():
+    def sample_half(filename):
+        with open(filename, 'r', encoding='utf-8') as f:
+            lines = [line.strip() for line in f if line.strip()]
+        sample_size = max(1, round(len(lines) * 0.5))
+        return random.sample(lines, sample_size)
+
+    # 抽样并合并
+    file1 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-内部验证.txt'
+    file2 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-外部验证.txt'
+    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-补充.txt'
+    data1 = sample_half(file1)
+    data2 = sample_half(file2)
+    merged = data1 + data2
+
+    # 写入文件
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for line in merged:
+            f.write(line + '\n')
+
+    print(f"完成！从 {file1} 抽 {len(data1)} 行，从 {file2} 抽 {len(data2)} 行")
+    print(f"总共 {len(merged)} 行数据导出到 {output_file}")
+
+
 if __name__ == '__main__':
     # paths_to_txt()
+    paths_to_txt2()
     # roi_crop()
     # roi_crop_txt()
     # txt_5cls()
     # os_rename()
     # generate_dataset_txt()
     
+    # merge_txt()
     # 训练集-待标注
     # train_data_shutil()
     
@@ -459,6 +513,6 @@ if __name__ == '__main__':
     # # 输出重复文件数量
     # print(f"重复的文件数量: {len(common_files)}")
 
-    keep_swollen_only("/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt",
-                      "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250929-仅肿大.txt")
+    # keep_swollen_only("/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt",
+    #                   "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250929-仅肿大.txt")
     print('done')

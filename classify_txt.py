@@ -183,16 +183,26 @@ def classification():
     # data = 'Section_QC/20250625-中山转移淋巴瘤5分类-原图-'
     # target_list = [x.name for x in TransCls5CN]
     # 良恶性2分类
-    data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
-    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250702-良恶性2分类-all.txt'
-    data = 'Section_QC/20250702-良恶性2分类-原图-'
-    target_list = [x.name for x in LymphPathologicCls2CN]
+    # data_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集/'
+    # txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250702-良恶性2分类-all.txt'
+    # data = 'Section_QC/20250702-良恶性2分类-原图-'
+    # target_list = [x.name for x in LymphPathologicCls2CN]
+    # 20251016-第三部分细分-淋巴瘤2分类
+    data_dir = ''
+    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-淋巴瘤2分类.txt'
+    data = 'Section_QC/20251016-第三部分细分-淋巴瘤2分类-'
+    target_list = [x.name for x in LymphCls2CN]
+    # 20251016-第三部分细分-转移6分类
+    # data_dir = ''
+    # txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-转移6分类.txt'
+    # data = 'Section_QC/20251016-第三部分细分-转移6分类-'
+    # target_list = [x.name for x in TransCls6CN]
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "6"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_name = 'resnet50'  # resnext50-bs128 densenet161-bs64 resnet18-bs256
     category_num = len(target_list)
-    bs = 200
+    bs = 64
     lr = 0.0001
     patience = 100
     num_epochs = 1000
