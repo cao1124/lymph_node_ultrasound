@@ -10,7 +10,7 @@ plot_util
 
 # Other files and folders
 .settings/
-
+.idea
 # Executables
 *.swf
 *.air

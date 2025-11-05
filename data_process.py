@@ -11,10 +11,12 @@ import json
 import os
 import random
 import shutil
+from collections import defaultdict
 
 from pathlib import Path
 import cv2
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from classify_util import cv_read, cv_write
@@ -54,11 +56,11 @@ def paths_to_txt():
 
 
 def paths_to_txt2():
-    folder_path = '/mnt/disk1/caoxu/dataset/中山淋巴结/20251016-第三部分细分/建模/淋巴瘤'
-    output_file = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分-淋巴瘤2分类.txt'
+    folder_path = r'E:\med_dataset\lymph淋巴结\中山淋巴结\20251103-增加数据\恶性\转移'
+    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251103-增加数据-转移6分类.txt'
     image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
     image_extensions = [ext.lower() for ext in image_extensions]
-    
+
     with open(output_file, 'w', encoding='utf-8') as f:
         for cls in os.listdir(folder_path):
             for root, dirs, files in os.walk(os.path.join(folder_path, cls)):
@@ -74,14 +76,28 @@ def paths_to_txt2():
                         file_path = os.path.join(root, file)
                         if '报告' in file:
                             continue
-                        if cls == 'others':
+                        # if cls == 'others':
+                        #     f.write(file_path + ',' + '其他\n')
+                        # elif cls == '弥漫大B':
+                        #     f.write(file_path + ',' + '弥漫大B\n')
+                        # else:
+                        #     print(file_path, ': 错误标签')
+
+                        if cls == '01肺癌':
+                            f.write(file_path + ',' + '肺癌\n')
+                        elif cls == '02乳腺癌':
+                            f.write(file_path + ',' + '乳腺癌\n')
+                        elif cls == '03食管癌':
+                            f.write(file_path + ',' + '食管癌\n')
+                        elif cls == '04鼻咽癌':
+                            f.write(file_path + ',' + '鼻咽癌\n')
+                        elif cls == '05腹腔肿瘤':
+                            f.write(file_path + ',' + '腹腔肿瘤\n')
+                        elif cls == '06others':
                             f.write(file_path + ',' + '其他\n')
-                        elif cls == '弥漫大B':
-                            f.write(file_path + ',' + '弥漫大B\n')
                         else:
                             print(file_path, ': 错误标签')
     print(f"已完成，共写入 {sum(1 for line in open(output_file, 'r', encoding='utf-8'))} 个图像路径到 {output_file}")
-
 
 def roi_crop_txt():
     roi_type = 'bbox'
@@ -189,82 +205,77 @@ def roi_crop_txt():
 
 def roi_crop():
     roi_type = 'bbox'
-    img_dir = r'F:\med_dataset\lymph淋巴结\中山淋巴结\域外测试集2\ori'
-    for cls in os.listdir(img_dir):
-        if cls == '良性':
-            continue
-        for root, dirs, files in os.walk(os.path.join(img_dir, cls)):
-            for f in files:
-                image_path = os.path.join(root, f)
-                json_path = os.path.join(root, f+'.json')
-                if not os.path.exists(json_path):
-                    continue
-                # 读取JSON文件
-                with open(json_path, 'r', encoding='utf8') as f:
-                    data = json.load(f)
-                # 获取淋巴结轮廓和模态标签
-                lymph_contours = []
-                try:
-                    # 从JSON结构中提取lymphContour
-                    contours = data['parts']['cervicalLymphNodes']['perContour']['lymphContour']
-                    for contour_data in contours:
-                        lymph_contours.append({
-                            'points': contour_data['contour'],
-                            'tags': contour_data.get('tags', [])
-                        })
+    img_dir = r'E:\med_dataset\lymph淋巴结\中山淋巴结\20251105-最后测试内外部人机对比'
+    for root, dirs, files in os.walk(img_dir):
+        for f in tqdm(files):
+            image_path = os.path.join(root, f)
+            json_path = os.path.join(root, f+'.json')
+            if not os.path.exists(json_path):
+                continue
+            # 读取JSON文件
+            with open(json_path, 'r', encoding='utf8') as f:
+                data = json.load(f)
+            # 获取淋巴结轮廓和模态标签
+            lymph_contours = []
+            try:
+                # 从JSON结构中提取lymphContour
+                contours = data['parts']['cervicalLymphNodes']['perContour']['lymphContour']
+                for contour_data in contours:
+                    lymph_contours.append({
+                        'points': contour_data['contour'],
+                        'tags': contour_data.get('tags', [])
+                    })
 
-                    # 获取模态标签
-                    modal_tags = data['parts']['cervicalLymphNodes']['perPart']['pictureModal']['tags']
-                except KeyError as e:
-                    print(f"JSON结构错误，缺少关键字段: {e}")
-                    continue
+                # 获取模态标签
+                # modal_tags = data['parts']['cervicalLymphNodes']['perPart']['pictureModal']['tags']
+            except KeyError as e:
+                print(f"JSON结构错误，缺少关键字段: {e}")
+                continue
 
-                # 检查模态是否为超声
-                if 'us' not in [tag.lower() for tag in modal_tags]:
-                    # print("模态不是US，跳过处理")
-                    continue
+            # 读取原始图像
+            img = cv_read(image_path)
+            if img is None:
+                print(f"无法读取图像: {image_path}")
+                continue
 
-                # 读取原始图像
-                img = cv_read(image_path)
-                if img is None:
-                    # print(f"无法读取图像: {image_path}")
+            # 处理每个淋巴结轮廓
+            for i, contour_data in enumerate(lymph_contours):
+                # 解析轮廓点
+                points = []
+                for pair in contour_data['points'].split():
+                    x, y = map(int, pair.split(','))
+                    points.append([x, y])
+                # 转换为NumPy数组
+                contour = np.array(points, dtype=np.int32)
+                if roi_type == 'mask':
+                    # 创建掩膜
+                    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                    cv2.fillPoly(mask, [contour], 255)
+                    # 应用掩膜
+                    img_crop = cv2.bitwise_and(img, img, mask=mask)
+                elif roi_type == 'bbox':
+                    # 计算最小外接矩形
+                    x, y, w, h = cv2.boundingRect(contour)
+                    # 添加边界填充（10%）
+                    pad_x = int(w * 0.1)
+                    pad_y = int(h * 0.1)
+                    # 计算裁剪区域（确保不超出图像边界）
+                    x1 = max(0, x - pad_x)
+                    y1 = max(0, y - pad_y)
+                    x2 = min(img.shape[1], x + w + pad_x)
+                    y2 = min(img.shape[0], y + h + pad_y)
+                    # 裁剪矩形区域
+                    img_crop = img[y1:y2, x1:x2]
+                else:
+                    print(f"不支持裁剪方式: {roi_type}")
                     continue
-
-                # 处理每个淋巴结轮廓
-                for i, contour_data in enumerate(lymph_contours):
-                    # 解析轮廓点
-                    points = []
-                    for pair in contour_data['points'].split():
-                        x, y = map(int, pair.split(','))
-                        points.append([x, y])
-                    # 转换为NumPy数组
-                    contour = np.array(points, dtype=np.int32)
-                    if roi_type == 'mask':
-                        # 创建掩膜
-                        mask = np.zeros(img.shape[:2], dtype=np.uint8)
-                        cv2.fillPoly(mask, [contour], 255)
-                        # 应用掩膜
-                        roi = cv2.bitwise_and(img, img, mask=mask)
-                    elif roi_type == 'bbox':
-                        # 计算最小外接矩形
-                        x, y, w, h = cv2.boundingRect(contour)
-                        # 添加边界填充（10%）
-                        pad_x = int(w * 0.1)
-                        pad_y = int(h * 0.1)
-                        # 计算裁剪区域（确保不超出图像边界）
-                        x1 = max(0, x - pad_x)
-                        y1 = max(0, y - pad_y)
-                        x2 = min(img.shape[1], x + w + pad_x)
-                        y2 = min(img.shape[0], y + h + pad_y)
-                        # 裁剪矩形区域
-                        roi = img[y1:y2, x1:x2]
-                    # 保存ROI图像
-                    output_path = image_path.replace('ori', 'crop')
-                    out_dir = os.path.dirname(output_path)
-                    os.makedirs(out_dir, exist_ok=True)
-                    cv_write(f'{os.path.splitext(output_path)[0]}.png', roi)
-                    # cv_write(f'{os.path.splitext(output_path)[0]}_roi_{i}_bbox.png', roi)
-                    # print(f"保存ROI图像: {output_path}")
+                # 保存ROI图像
+                output_path = image_path.replace('20251105-最后测试内外部人机对比', '20251105-最后测试内外部人机对比-crop')
+                out_dir = os.path.dirname(output_path)
+                os.makedirs(out_dir, exist_ok=True)
+                cv_write(f'{os.path.splitext(output_path)[0]}.png', img_crop)
+                # cv_write(f'{os.path.splitext(output_path)[0]}_roi_{i}_bbox.png', img_crop)
+                # print(f"保存ROI图像: {output_path}")
 
 
 def txt_5cls():
@@ -461,19 +472,21 @@ def keep_swollen_only(in_txt: str, out_txt: str, encoding: str = "utf-8"):
 
 
 def merge_txt():
-    def sample_half(filename):
+    def sample_half(filename, num):
         with open(filename, 'r', encoding='utf-8') as f:
             lines = [line.strip() for line in f if line.strip()]
-        sample_size = max(1, round(len(lines) * 0.5))
+        sample_size = max(1, round(len(lines) * num))
         return random.sample(lines, sample_size)
 
-    # 抽样并合并
-    file1 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-内部验证.txt'
-    file2 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-外部验证.txt'
-    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-转移6分类-补充.txt'
-    data1 = sample_half(file1)
-    data2 = sample_half(file2)
-    merged = data1 + data2
+    # 抽样并合并  淋巴瘤2分类  转移6分类
+    file1 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-淋巴瘤2分类-内部验证.txt'
+    file2 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251016-第三部分细分-淋巴瘤2分类-外部验证.txt'
+    file3 = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251103-增加数据-淋巴瘤2分类.txt'
+    output_file = r'E:\med_dataset\lymph淋巴结\中山淋巴结\训练集txt\ori\20251016-第三部分细分\20251103-淋巴瘤2分类-补充.txt'
+    data1 = sample_half(file1, 0.6)
+    data2 = sample_half(file2, 0.6)
+    data3 = sample_half(file3, 0.6)
+    merged = data1 + data2 + data3
 
     # 写入文件
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -484,35 +497,142 @@ def merge_txt():
     print(f"总共 {len(merged)} 行数据导出到 {output_file}")
 
 
+def common_files():
+    original_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-中山淋巴恶性瘤淋巴瘤2分类-补充训练-all.txt"
+    image_dir = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop"
+    output_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-filtered_dataset.txt"
+    
+    filter_txt_by_existing_images(original_txt, image_dir, output_txt)
+    print(f"过滤完成! 结果保存在 {output_txt}")
+    
+    # 计算重复文件
+    all_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\所有颈部淋巴'  # 包含10743张图
+    swollen_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\肿大颈部淋巴'  # 包含2543张图
+    all_lymph_files = set(os.listdir(all_lymph_root))
+    swollen_lymph_files = set(os.listdir(swollen_lymph_root))
+    common_files = all_lymph_files.intersection(swollen_lymph_files)
+    # 输出重复文件数量
+    print(f"重复的文件数量: {len(common_files)}")
+    
+    keep_swollen_only("/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt",
+                      "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250929-仅肿大.txt")
+
+
+def excel_data_get():
+    excel_path = r"D:\med_code\lymph_node_ultrasound\plot_util\辅助学习模型-外部验证结果.xlsx"
+    root_dir = r"E:\med_dataset\lymph淋巴结\中山淋巴结\20251105-内外部测试-人机对比\外部验证"
+    out_excel = r"D:\med_code\lymph_node_ultrasound\plot_util\辅助学习模型-外部验证结果-人机对比.xlsx"
+    IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".gif", ".webp", ".dcm"}
+
+    def is_image_file(path: str) -> bool:
+        return os.path.splitext(path)[1].lower() in IMG_EXTS
+
+    # 读取 Excel，并从原始 path 中抽取“文件名(含扩展)”与“文件名(不含扩展)”
+    df = pd.read_excel(excel_path)
+
+    # 容错：列名大小写/空白处理
+    df.columns = [c.strip().lower() for c in df.columns]
+    required = {"path", "label", "pred"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Excel 缺少必要列: {missing}，请确保包含 {required}")
+
+    def get_name_and_stem(p: str):
+        base = os.path.basename(str(p))
+        name = base  # 带扩展名
+        stem = os.path.splitext(base)[0]  # 去扩展名
+        return name, stem
+
+    df["__name__"], df["__stem__"] = zip(*df["path"].map(get_name_and_stem))
+
+    # 建立从 “文件名(含扩展)” 与 “文件名(不含扩展)” 到 Excel 记录 的索引
+    index_by_name = defaultdict(list)
+    index_by_stem = defaultdict(list)
+
+    for i, row in df.iterrows():
+        index_by_name[row["__name__"]].append(i)
+        index_by_stem[row["__stem__"]].append(i)
+
+    # 遍历内部验证目录，搜集实际存在的图像文件
+    matched_rows = []  # 成功匹配并输出的数据
+    conflict_records = []  # Excel 中同名多条（>1）的冲突情况
+    unmatched_files = []  # 目录里有文件但Excel中没有对应项
+    covered_excel_flags = [False] * len(df)  # 哪些Excel行被覆盖到了（用于统计）
+
+    for dirpath, _, filenames in os.walk(root_dir):
+        for fn in filenames:
+            if not is_image_file(fn):
+                continue
+            abs_path = os.path.join(dirpath, fn)
+            name = fn
+            stem = os.path.splitext(fn)[0]
+
+            # 先用“带扩展名”精确匹配；若无，再用“去扩展名”匹配
+            cand_idx = index_by_name.get(name, [])
+            if not cand_idx:
+                cand_idx = index_by_stem.get(stem, [])
+
+            if not cand_idx:
+                unmatched_files.append(abs_path)
+                continue
+
+            if len(cand_idx) > 1:
+                # 多条冲突，全部记录到 conflict sheet，仍默认取第1条以便继续产出
+                conflict_records.append({
+                    "file_in_dir": abs_path,
+                    "match_count": len(cand_idx),
+                    "matched_excel_rows": cand_idx
+                })
+
+            # 选择第一条作为匹配（如需自定义取法，可在此处加规则）
+            idx = cand_idx[0]
+            covered_excel_flags[idx] = True
+            matched_rows.append({
+                "path_in_internal": abs_path,  # 实际存在的内部验证路径
+                "filename": name,  # 文件名
+                "label": df.at[idx, "label"],
+                "pred": df.at[idx, "pred"],
+                "orig_excel_path": df.at[idx, "path"],  # 原Excel中的原始路径
+            })
+
+    # 生成并写出结果Excel
+    out_df = pd.DataFrame(matched_rows)
+    out_df = out_df.sort_values(by=["filename"]).reset_index(drop=True)
+
+    # 未覆盖的Excel记录（Excel里有，但内部验证目录没有找到相应文件）
+    not_covered_df = df.loc[[i for i, hit in enumerate(covered_excel_flags) if not hit],
+    ["path", "label", "pred", "__name__", "__stem__"]].copy()
+
+    conflict_df = pd.DataFrame(conflict_records)
+
+    with pd.ExcelWriter(out_excel, engine="openpyxl") as writer:
+        out_df.to_excel(writer, index=False, sheet_name="matched")
+        not_covered_df.to_excel(writer, index=False, sheet_name="excel_not_matched")
+        if not conflict_df.empty:
+            conflict_df.to_excel(writer, index=False, sheet_name="name_conflicts")
+        if unmatched_files:
+            pd.DataFrame({"file_in_internal_only": unmatched_files}).to_excel(
+                writer, index=False, sheet_name="dir_only_files"
+            )
+
+    print(f"✅ Done. Matched rows: {len(out_df)}")
+    print(f"   - Excel rows not matched by any file: {len(not_covered_df)}")
+    print(f"   - Files in dir not found in Excel: {len(unmatched_files)}")
+    print(f"   - Conflicts (same name -> multiple Excel rows): {len(conflict_df)}")
+    print(f"Output saved to: {out_excel}")
+
+
 if __name__ == '__main__':
     # paths_to_txt()
-    paths_to_txt2()
+    # paths_to_txt2()
     # roi_crop()
     # roi_crop_txt()
     # txt_5cls()
     # os_rename()
     # generate_dataset_txt()
-    
+    # common_files()
     # merge_txt()
-    # 训练集-待标注
     # train_data_shutil()
+    excel_data_get()
     
-    # original_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-中山淋巴恶性瘤淋巴瘤2分类-补充训练-all.txt"
-    # image_dir = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集crop"
-    # output_txt = "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/crop/20250910-filtered_dataset.txt"
-    #
-    # filter_txt_by_existing_images(original_txt, image_dir, output_txt)
-    # print(f"过滤完成! 结果保存在 {output_txt}")
-
-    # # 计算重复文件
-    # all_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\所有颈部淋巴'  # 包含10743张图
-    # swollen_lymph_root = r'E:\med_dataset\lymph淋巴结\中山淋巴结\弱标签数据\肿大颈部淋巴'  # 包含2543张图
-    # all_lymph_files = set(os.listdir(all_lymph_root))
-    # swollen_lymph_files = set(os.listdir(swollen_lymph_root))
-    # common_files = all_lymph_files.intersection(swollen_lymph_files)
-    # # 输出重复文件数量
-    # print(f"重复的文件数量: {len(common_files)}")
-
-    # keep_swollen_only("/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250812-肿大软标签.txt",
-    #                   "/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/ori/20250929-仅肿大.txt")
     print('done')

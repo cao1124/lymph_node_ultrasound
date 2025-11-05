@@ -9,6 +9,7 @@
 """
 import os
 
+import pandas as pd
 import torch
 from PIL import Image
 from sklearn.metrics import confusion_matrix, classification_report
@@ -45,9 +46,18 @@ def test_image():
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    mean, std = [0.29003, 0.29385, 0.31377], [0.18866, 0.19251, 0.19958]
-    trans = transforms.Compose([transforms.Resize([224, 224]), transforms.ToTensor(), transforms.Normalize(mean, std)])
-    test_image()
+    # os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # mean, std = [0.29003, 0.29385, 0.31377], [0.18866, 0.19251, 0.19958]
+    # trans = transforms.Compose([transforms.Resize([224, 224]), transforms.ToTensor(), transforms.Normalize(mean, std)])
+    # test_image()
+
+    excel_path = r'D:\med_code\lymph_node_ultrasound\plot_util\辅助学习模型-内部验证结果.xlsx'
+    excel_data = pd.read_excel(excel_path, sheet_name='人机对比')
+    labels = excel_data['label'].tolist()
+    pred = excel_data['pred'].tolist()
+
+    # confusion_matrix
+    print('confusion_matrix:\n{}'.format(confusion_matrix(labels, pred)))
+    print('classification_report:\n{}'.format(classification_report(labels, pred, digits=4)))
     print('Done')
