@@ -188,15 +188,15 @@ def classification():
     # data = 'Section_QC/20250702-良恶性2分类-原图-'
     # target_list = [x.name for x in LymphPathologicCls2CN]
     # 20251016-第三部分细分-淋巴瘤2分类
-    data_dir = ''
-    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-淋巴瘤2分类.txt'
-    data = 'Section_QC/20251016-第三部分细分-淋巴瘤2分类-'
-    target_list = [x.name for x in LymphCls2CN]
-    # 20251016-第三部分细分-转移6分类
     # data_dir = ''
-    # txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-转移6分类.txt'
-    # data = 'Section_QC/20251016-第三部分细分-转移6分类-'
-    # target_list = [x.name for x in TransCls6CN]
+    # txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-淋巴瘤2分类.txt'
+    # data = 'Section_QC/20251016-第三部分细分-淋巴瘤2分类-'
+    # target_list = [x.name for x in LymphCls2CN]
+    # 20251016-第三部分细分-转移6分类
+    data_dir = ''
+    txt_dir = '/mnt/disk1/caoxu/dataset/中山淋巴结/训练集txt/20251016-第三部分细分/20251016-第三部分细分-转移6分类.txt'
+    data = 'Section_QC/20251016-第三部分细分-转移6分类-'
+    target_list = [x.name for x in TransCls6CN]
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "6"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

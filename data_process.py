@@ -625,7 +625,7 @@ def excel_data_get():
 if __name__ == '__main__':
     # paths_to_txt()
     # paths_to_txt2()
-    # roi_crop()
+    roi_crop()
     # roi_crop_txt()
     # txt_5cls()
     # os_rename()
@@ -633,6 +633,6 @@ if __name__ == '__main__':
     # common_files()
     # merge_txt()
     # train_data_shutil()
-    excel_data_get()
+    # excel_data_get()
     
     print('done')
