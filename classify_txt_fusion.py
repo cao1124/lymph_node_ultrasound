@@ -21,7 +21,7 @@ import numpy as np
 
 from classify_util import img_trans, EarlyStopping, BalanceDataSampler, TransCls6CN
 from classify_util_fusion import DatasetTxtTwo, prepare_model_fusion
-
+from fusion_cross_shared import prepare_model_fusion_cross
 matplotlib.use('AGG')
 torch.multiprocessing.set_sharing_strategy('file_system')
 warnings.filterwarnings("ignore")
@@ -64,9 +64,19 @@ def train(data_dir, txt_path, num_epochs, bs, pt_dir, category_num, device, lr, 
         test_loader  = DataLoader(test_dataset,  bs, shuffle=False, num_workers=2)
 
         # 模型 + 优化器 + 调度器 + warmup + 损失
-        model, optimizer, scheduler, warmup, loss_func = prepare_model_fusion(
-            category_num=category_num, lr=lr, num_epochs=num_epochs, device=device,
-            weights=torch.tensor(class_weights), backbone="resnet50"
+        # model, optimizer, scheduler, warmup, loss_func = prepare_model_fusion(
+        #     category_num=category_num, lr=lr, num_epochs=num_epochs, device=device,
+        #     weights=torch.tensor(class_weights), backbone="resnet50"
+        # )
+
+        # fusion cross shared
+        model, optimizer, scheduler, warmup, loss_func = prepare_model_fusion_cross(
+            num_classes=category_num,
+            lr=lr,
+            num_epochs=num_epochs,
+            device=device,
+            class_weights=torch.tensor(class_weights),
+            pretrained=True
         )
 
         early_stopping = EarlyStopping(pt_dir, patience=patience)
